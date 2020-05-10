@@ -11,11 +11,13 @@
 #define GENERATOR_Y "483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8"
 #define AUX_TAG "BIP340/aux"
 #define NONCE_TAG "BIP340/nonce"
+#define CHALLENGE_TAG "BIP340/challenge"
 
 typedef struct {
     EC_GROUP* group;
     BN_CTX* bn_ctx;
     SHA256_CTX* sha256_ctx;
+    BIGNUM* p;
 } SCHNORR_CTX;
 
 SCHNORR_CTX* SCHNORR_CTX_new();
@@ -24,3 +26,4 @@ void SCHNORR_CTX_free(SCHNORR_CTX* ctx);
 int has_even_y(const SCHNORR_CTX* ctx, const EC_POINT* P);
 unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t taglen, const unsigned char* x, const size_t xlen);
 unsigned char* point_bytes(SCHNORR_CTX* ctx, const EC_POINT* P);
+int has_square_y(SCHNORR_CTX* ctx, const EC_POINT* P);

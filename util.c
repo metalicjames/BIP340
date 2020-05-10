@@ -4,7 +4,6 @@
 
 SCHNORR_CTX* SCHNORR_CTX_new() {
     SCHNORR_CTX* ret = NULL;
-    BIGNUM* p = NULL;
     BIGNUM* n = NULL;
     BIGNUM* a = NULL;
     BIGNUM* b = NULL;
@@ -19,8 +18,9 @@ SCHNORR_CTX* SCHNORR_CTX_new() {
     ret->bn_ctx = NULL;
     ret->group = NULL;
     ret->sha256_ctx = NULL;
+    ret->p = NULL;
 
-    if(!BN_hex2bn(&p, FIELD_SIZE)) {
+    if(!BN_hex2bn(&ret->p, FIELD_SIZE)) {
         goto error;
     }
 
@@ -42,7 +42,7 @@ SCHNORR_CTX* SCHNORR_CTX_new() {
         goto error;
     }
 
-    ret->group = EC_GROUP_new_curve_GFp(p, a, b, ret->bn_ctx);
+    ret->group = EC_GROUP_new_curve_GFp(ret->p, a, b, ret->bn_ctx);
     if(ret->group == NULL) {
         goto error;
     }
@@ -81,7 +81,6 @@ SCHNORR_CTX* SCHNORR_CTX_new() {
     SCHNORR_CTX_free(ret);
 
     cleanup:
-    BN_free(p);
     BN_free(n);
     BN_free(a);
     BN_free(b);
@@ -97,6 +96,7 @@ void SCHNORR_CTX_free(SCHNORR_CTX* ctx) {
         BN_CTX_free(ctx->bn_ctx);
         EC_GROUP_free(ctx->group);
         free(ctx->sha256_ctx);
+        BN_free(ctx->p);
     }
     free(ctx);
 }
@@ -126,7 +126,7 @@ unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t tagle
     unsigned char* tag_hash = NULL;
     unsigned char* output = NULL;
 
-    tag_hash = malloc(sizeof(SHA256_DIGEST_LENGTH));
+    tag_hash = malloc(SHA256_DIGEST_LENGTH);
     if(tag_hash == NULL) {
         goto cleanup;
     }
@@ -143,7 +143,7 @@ unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t tagle
         goto cleanup;
     }
 
-    output = malloc(sizeof(SHA256_DIGEST_LENGTH));
+    output = malloc(SHA256_DIGEST_LENGTH);
     if(output == NULL) {
         goto error;
     }
@@ -152,11 +152,11 @@ unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t tagle
         goto error;
     }
 
-    if(!SHA256_Update(ctx->sha256_ctx, tag_hash, sizeof(SHA256_DIGEST_LENGTH))) {
+    if(!SHA256_Update(ctx->sha256_ctx, tag_hash, SHA256_DIGEST_LENGTH)) {
         goto error;
     }
     
-    if(!SHA256_Update(ctx->sha256_ctx, tag_hash, sizeof(SHA256_DIGEST_LENGTH))) {
+    if(!SHA256_Update(ctx->sha256_ctx, tag_hash, SHA256_DIGEST_LENGTH)) {
         goto error;
     }
     
@@ -209,9 +209,61 @@ unsigned char* point_bytes(SCHNORR_CTX* ctx, const EC_POINT* P) {
 }
 
 int is_square(SCHNORR_CTX* ctx, const BIGNUM* x) {
-    
+    int retval = -1;
+    BIGNUM* pval = NULL;
+    BIGNUM* legendre = NULL;
+
+    pval = BN_new();
+    if(pval == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_sub(pval, x, BN_value_one())) {
+        goto cleanup;
+    }
+
+    if(!BN_rshift1(pval, pval)) {
+        goto cleanup;
+    }
+
+    legendre = BN_new();
+    if(legendre == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_mod_exp(legendre, x, pval, ctx->p, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    retval = BN_is_one(legendre);
+
+    cleanup:
+    BN_free(pval);
+    BN_free(legendre);
+
+    return retval;
 }
 
 int has_square_y(SCHNORR_CTX* ctx, const EC_POINT* P) {
+    int retval = -1;
+    
+    if(EC_POINT_is_at_infinity(ctx->group, P)) {
+        return 0;
+    }
 
+    BIGNUM* y = BN_new();
+    if(y == NULL) {
+        goto cleanup;
+    }
+
+    if(!EC_POINT_get_affine_coordinates(ctx->group, P, NULL, y, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    retval = is_square(ctx, y);
+
+    cleanup:
+    BN_free(y);
+
+    return retval;
 }
