@@ -267,3 +267,132 @@ int has_square_y(SCHNORR_CTX* ctx, const EC_POINT* P) {
 
     return retval;
 }
+
+EC_POINT* lift_x_square_y(SCHNORR_CTX* ctx, const BIGNUM* x) {
+    BIGNUM* c_1 = NULL;
+    BIGNUM* three = NULL;
+    BIGNUM* seven = NULL;
+    BIGNUM* c = NULL;
+    BIGNUM* p_plus = NULL;
+    BIGNUM* y = NULL;
+    BIGNUM* y_sq = NULL;
+    EC_POINT* retval = NULL;
+
+    if(!BN_dec2bn(&three, "3")) {
+        goto cleanup;
+    }
+
+    c_1 = BN_new();
+    if(c_1 == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_mod_exp(c_1, x, three, ctx->p, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    if(!BN_dec2bn(&seven, "7")) {
+        goto cleanup;
+    }
+
+    c = BN_new();
+    if(c == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_mod_add(c, c_1, seven, ctx->p, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    p_plus = BN_new();
+    if(p_plus == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_add(p_plus, ctx->p, BN_value_one())) {
+        goto cleanup;
+    }
+
+    if(!BN_rshift(p_plus, p_plus, 2)) {
+        goto cleanup;
+    }
+
+    y = BN_new();
+    if(y == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_mod_exp(y, c, p_plus, ctx->p, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    y_sq = BN_new();
+    if(y_sq == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_mod_sqr(y_sq, y, ctx->p, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    if(BN_cmp(c, y_sq) != 0) {
+        goto cleanup;
+    }
+
+    retval = EC_POINT_new(ctx->group);
+    if(retval == NULL) { 
+        goto cleanup;
+    }
+
+    if(!EC_POINT_set_affine_coordinates(ctx->group, retval, x, y, ctx->bn_ctx)) {
+        goto error;
+    }
+
+    if(!EC_POINT_is_on_curve(ctx->group, retval, ctx->bn_ctx)) {
+        goto error;
+    }
+
+    if(EC_POINT_is_at_infinity(ctx->group, retval)) {
+        goto error;
+    }
+
+    error:
+    EC_POINT_free(retval);
+    retval = NULL;
+
+    cleanup:
+    BN_free(c_1);
+    BN_free(three);
+    BN_free(seven);
+    BN_free(c);
+    BN_free(p_plus);
+    BN_free(y);
+    BN_free(y_sq);
+
+    return retval;
+}
+
+EC_POINT* lift_x_even_y(SCHNORR_CTX* ctx, const BIGNUM* x) {
+    EC_POINT* retval = lift_x_square_y(ctx, x);
+
+    if(retval == NULL) {
+        return NULL;
+    }
+
+    const int even = has_even_y(ctx, retval);
+    if(even < 0) {
+        EC_POINT_free(retval);
+        return NULL;
+    }
+
+    if(even) {
+        return retval;
+    } else {
+        if(!EC_POINT_invert(ctx->group, retval, ctx->bn_ctx)) {
+            EC_POINT_free(retval);
+            return NULL;
+        } else {
+            return retval;
+        }
+    }
+}

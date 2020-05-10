@@ -27,3 +27,4 @@ int has_even_y(const SCHNORR_CTX* ctx, const EC_POINT* P);
 unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t taglen, const unsigned char* x, const size_t xlen);
 unsigned char* point_bytes(SCHNORR_CTX* ctx, const EC_POINT* P);
 int has_square_y(SCHNORR_CTX* ctx, const EC_POINT* P);
+EC_POINT* lift_x_even_y(SCHNORR_CTX* ctx, const BIGNUM* x);
