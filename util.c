@@ -356,6 +356,8 @@ EC_POINT* lift_x_square_y(SCHNORR_CTX* ctx, const BIGNUM* x) {
         goto error;
     }
 
+    goto cleanup;
+
     error:
     EC_POINT_free(retval);
     retval = NULL;

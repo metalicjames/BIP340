@@ -13,6 +13,7 @@ int SCHNORR_verify(SCHNORR_CTX* ctx, const unsigned char* pk, const unsigned cha
     unsigned char* e_bytes = NULL;
     BIGNUM* e_unmod = NULL;
     BIGNUM* e = NULL;
+    BIGNUM* e_inv = NULL;
     EC_POINT* R = NULL;
     BIGNUM* x = NULL;
 
@@ -92,7 +93,16 @@ int SCHNORR_verify(SCHNORR_CTX* ctx, const unsigned char* pk, const unsigned cha
         goto cleanup;
     }
 
-    if(!EC_POINT_mul(ctx->group, R, s, P, e, ctx->bn_ctx)) {
+    e_inv = BN_new();
+    if(e_inv == NULL) {
+        goto cleanup;
+    }
+
+    if(!BN_sub(e_inv, order, e)) {
+        goto cleanup;
+    }
+
+    if(!EC_POINT_mul(ctx->group, R, s, P, e_inv, ctx->bn_ctx)) {
         goto cleanup;
     }
 
@@ -126,6 +136,7 @@ int SCHNORR_verify(SCHNORR_CTX* ctx, const unsigned char* pk, const unsigned cha
     free(e_bytes);
     EC_POINT_free(R);
     BN_free(x);
+    BN_free(e_inv);
 
     return retval;
 }
