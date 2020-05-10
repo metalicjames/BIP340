@@ -1,0 +1,1 @@
+gcc -Werror -Wall -Wextra main.c util.c sign.c -o schnorr -lcrypto
