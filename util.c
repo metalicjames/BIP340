@@ -168,6 +168,8 @@ unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t tagle
         goto error;
     }
 
+    goto cleanup;
+
     error:
     free(output);
 
@@ -190,14 +192,16 @@ unsigned char* point_bytes(SCHNORR_CTX* ctx, const EC_POINT* P) {
         goto cleanup;
     }
 
-    retval = malloc(sizeof(SK_LEN));
+    retval = malloc(SK_LEN);
     if(retval == NULL) {
         goto error;
     }
 
-    if(BN_bn2binpad(x, retval, sizeof(SK_LEN)) != sizeof(SK_LEN)) {
+    if(BN_bn2binpad(x, retval, SK_LEN) != SK_LEN) {
         goto error;
     }
+
+    goto cleanup;
 
     error:
     free(retval);
@@ -218,7 +222,7 @@ int is_square(SCHNORR_CTX* ctx, const BIGNUM* x) {
         goto cleanup;
     }
 
-    if(!BN_sub(pval, x, BN_value_one())) {
+    if(!BN_sub(pval, ctx->p, BN_value_one())) {
         goto cleanup;
     }
 
@@ -397,4 +401,51 @@ EC_POINT* lift_x_even_y(SCHNORR_CTX* ctx, const BIGNUM* x) {
             return retval;
         }
     }
+}
+
+void print_point(SCHNORR_CTX* ctx, const EC_POINT* p) {
+    char* pthex = EC_POINT_point2hex(ctx->group, p, POINT_CONVERSION_UNCOMPRESSED, ctx->bn_ctx);
+    printf("%.*s, %.*s\n", 64, pthex + 2, 64, pthex + 66);
+    free(pthex);
+}
+
+void print_bn(const BIGNUM* b) {
+    char* bhex = BN_bn2hex(b);
+    printf("%.*s\n", 64, bhex);
+    free(bhex);
+}
+
+void print_buf(const unsigned char* buf, const size_t len) {
+    for(size_t i = 0; i < len; i++) {
+        printf("%02x", *(buf + i));
+    }
+    printf("\n");
+}
+
+unsigned char* pk_from_sk(SCHNORR_CTX* ctx, const unsigned char* sk) {
+    BIGNUM* sknum = NULL;
+    EC_POINT* pk = NULL;
+    unsigned char* retval = NULL;
+
+    sknum = BN_bin2bn(sk, SK_LEN, NULL);
+    if(sknum == NULL) {
+        return NULL;
+    }
+
+    pk = EC_POINT_new(ctx->group);
+    if(pk == NULL) {
+        goto cleanup;
+    }
+
+    if(!EC_POINT_mul(ctx->group, pk, sknum, NULL, NULL, ctx->bn_ctx)) {
+        goto cleanup;
+    }
+
+    retval = point_bytes(ctx, pk);
+
+    cleanup:
+    BN_free(sknum);
+    EC_POINT_free(pk);
+
+    return retval;
 }

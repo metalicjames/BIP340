@@ -226,6 +226,8 @@ unsigned char* SCHNORR_sign(SCHNORR_CTX* ctx, const unsigned char* sk, const uns
         goto error;
     }
 
+    goto cleanup;
+
     error:
     free(sig);
     sig = NULL;

@@ -1,3 +1,6 @@
+#ifndef SCHNORR_UTIL_INC
+#define SCHNORR_UTIL_INC
+
 #include <openssl/ec.h>
 #include <openssl/sha.h>
 
@@ -28,3 +31,11 @@ unsigned char* tagged_hash(SCHNORR_CTX* ctx, const char* tag, const size_t tagle
 unsigned char* point_bytes(SCHNORR_CTX* ctx, const EC_POINT* P);
 int has_square_y(SCHNORR_CTX* ctx, const EC_POINT* P);
 EC_POINT* lift_x_even_y(SCHNORR_CTX* ctx, const BIGNUM* x);
+
+unsigned char* pk_from_sk(SCHNORR_CTX* ctx, const unsigned char* sk);
+
+void print_point(SCHNORR_CTX* ctx, const EC_POINT* p);
+void print_bn(const BIGNUM* b);
+void print_buf(const unsigned char* buf, const size_t len);
+
+#endif
