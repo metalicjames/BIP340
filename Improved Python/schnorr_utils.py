@@ -54,7 +54,9 @@ def lift_x_even_y(b: bytes) -> Optional[Point]:
     else:
         return Point(P.x, P.y if P.y % 2 == 0 else p - P.y, curve)
 
-tagged_hashes = {}
+tagged_hashes = {"BIP340/challenge": hashlib.sha256("BIP340/challenge".encode()).digest(), \
+                "BIP340/aux": hashlib.sha256("BIP340/aux".encode()).digest(), \
+                "BIP340/nonce": hashlib.sha256("BIP340/nonce".encode()).digest()}
 
 def tagged_hash(tag: str, msg: bytes) -> bytes:
     if tag in tagged_hashes:
