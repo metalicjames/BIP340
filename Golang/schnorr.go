@@ -1,13 +1,12 @@
 package schnorr
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"golang.org/x/crypto/chacha20"
 )
 
 var curve = secp256k1.S256()
@@ -67,7 +66,12 @@ func lift_x_even_y(x *big.Int) (*big.Int, *big.Int, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return Px, Py, nil
+	if new(big.Int).Mod(Py, big.NewInt(2)).Cmp(big.NewInt(0)) == 0 {
+		return Px, Py, nil
+	} else {
+		Py.Sub(curve.P, Py)
+		return Px, Py, nil
+	}
 }
 
 func point(x []byte) (*big.Int, *big.Int, error) {
@@ -83,7 +87,7 @@ func hash(tag string, x []byte) []byte {
 	toHash = append(toHash, tagHash[:]...)
 	toHash = append(toHash, x...)
 	hashed := sha256.Sum256(toHash)
-	return hashed[:]
+	return pad(hashed[:], 32)
 }
 
 func PubKey(sk []byte) []byte {
@@ -204,7 +208,6 @@ func Verify(pk, m, sig []byte) bool {
 }
 
 func BatchVerify(u int, pk, m, sig [][]byte) bool {
-	fmt.Printf("u: %v\n", u)
 	if len(pk) != u || len(m) != u || len(sig) != u {
 		panic("Bad array length")
 	}
@@ -229,67 +232,69 @@ func BatchVerify(u int, pk, m, sig [][]byte) bool {
 	Rx = make([]*big.Int, u)
 	Ry = make([]*big.Int, u)
 	a[0] = big.NewInt(1)
+	var seed []byte
+	for i := 0; i < u; i++ {
+		seed = append(seed, pk[i]...)
+		seed = append(seed, m[i]...)
+		seed = append(seed, sig[i]...)
+	}
+	seedFixed := sha256.Sum256(seed)
+	seed = seedFixed[:]
 	for i := 1; i < u; i++ {
-		a[i], _ = rand.Int(rand.Reader, new(big.Int).Sub(curve.N, big.NewInt(1)))
-		a[i].Add(a[i], big.NewInt(1))
+		//a[i] = big.NewInt(int64(i + 1))
+		bytes, _ := chacha20.HChaCha20(seed, pad(big.NewInt(0).Bytes(), 16))
+		a[i] = new(big.Int).SetBytes(bytes)
+		if a[i].Cmp(big.NewInt(0)) <= 0 || a[i].Cmp(curve.N) >= 0 {
+			i--
+		}
 	}
 	for i := 0; i < u; i++ {
 		var err error
 		Px[i], Py[i], err = lift_x_even_y(new(big.Int).SetBytes(pk[i]))
 		if err != nil {
-			println("FAIL 1")
 			return false
 		}
 		r[i] = new(big.Int).SetBytes(sig[i][:32])
 		if r[i].Cmp(curve.P) >= 0 {
-			println("FAIL 2")
 			return false
 		}
 		s[i] = new(big.Int).SetBytes(sig[i][32:])
 		if s[i].Cmp(curve.N) >= 0 {
-			println("FAIL 3")
 			return false
 		}
-		toHash := r[i].Bytes()
-		toHash = append(toHash, Px[i].Bytes()...)
+		toHash := bytes32(r[i])
+		toHash = append(toHash, bytes32(Px[i])...)
 		toHash = append(toHash, m[i]...)
 		e[i] = new(big.Int).SetBytes(hash("BIP340/challenge", toHash))
 		e[i].Mod(e[i], curve.N)
 		Rx[i], Ry[i], err = lift_x(r[i])
 		if err != nil {
-			println("FAIL 4")
 			return false
 		}
 	}
-	var temp1, temp2x, temp2y, temp3x, temp3y, res1x, res1y, res2x, res2y *big.Int
+	var temp1, temp2x, temp2y, res1x, res1y, res2x, res2y *big.Int
 	temp1 = big.NewInt(0)
 	for i := 0; i < u; i++ {
-		temp1.Add(temp1, new(big.Int).Mul(a[i], s[i]))
+		x := new(big.Int).Mul(a[i], s[i])
+		temp1.Add(temp1, x)
 	}
-	temp1.Mod(temp1, curve.P)
+	temp1.Mod(temp1, curve.N)
 	res1x, res1y = curve.ScalarBaseMult(temp1.Bytes())
-	temp2x = big.NewInt(0)
-	temp2y = big.NewInt(0)
-	for i := 0; i < u; i++ {
+	temp2x = Rx[0]
+	temp2y = Ry[0]
+	for i := 1; i < u; i++ {
 		x, y := curve.ScalarMult(Rx[i], Ry[i], a[i].Bytes())
-		temp2x.Add(temp2x, x)
-		temp2y.Add(temp2y, y)
+		temp2x, temp2y = curve.Add(temp2x, temp2y, x, y)
 	}
-	temp3x = big.NewInt(0)
-	temp3y = big.NewInt(0)
 	for i := 0; i < u; i++ {
 		s := new(big.Int).Mul(a[i], e[i])
-		s.Mod(s, curve.P)
+		s.Mod(s, curve.N)
 		x, y := curve.ScalarMult(Px[i], Py[i], s.Bytes())
-		temp3x.Add(temp3x, x)
-		temp3y.Add(temp3y, y)
+		temp2x, temp2y = curve.Add(temp2x, temp2y, x, y)
 	}
-	res2x = new(big.Int)
-	res2y = new(big.Int)
-	res2x.Add(temp2x, temp3x)
-	res2y.Add(temp2y, temp3y)
+	res2x = temp2x
+	res2y = temp2y
 	if res2x.Cmp(res1x) != 0 || res2y.Cmp(res1y) != 0 {
-		println("FAIL 5")
 		return false
 	}
 	return true

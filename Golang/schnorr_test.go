@@ -16,6 +16,7 @@ func Test(t *testing.T) {
 	f, _ := os.Open("test-vectors.csv")
 	reader := csv.NewReader(bufio.NewReader(f))
 	var sk []byte
+
 	for {
 		record, error := reader.Read()
 		if error == io.EOF {
@@ -57,9 +58,13 @@ func Test(t *testing.T) {
 			t.Errorf("Error on verify %v", i)
 		}
 	}
+}
+
+func TestBatch(t *testing.T) {
 	u := 0
 	var pks, ms, sigs [][]byte
-	f.Seek(0, io.SeekStart)
+	f, _ := os.Open("test-vectors-multi.csv")
+	reader := csv.NewReader(bufio.NewReader(f))
 	for {
 		record, error := reader.Read()
 		if error == io.EOF {
@@ -71,17 +76,13 @@ func Test(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if record[1] != "" {
-			skint, _ := new(big.Int).SetString(record[1], 16)
-			sk = pad(skint.Bytes(), 32)
-		}
 		pkint, _ := new(big.Int).SetString(record[2], 16)
 		pk := pad(pkint.Bytes(), 32)
-		mint, _ := new(big.Int).SetString(record[3], 16)
+		mint, _ := new(big.Int).SetString(record[4], 16)
 		m := pad(mint.Bytes(), 32)
-		sigint, _ := new(big.Int).SetString(record[4], 16)
+		sigint, _ := new(big.Int).SetString(record[5], 16)
 		sig := bytes64(sigint)
-		expected, _ := strconv.ParseBool(record[5])
+		expected, _ := strconv.ParseBool(record[6])
 		if !expected {
 			continue
 		}
